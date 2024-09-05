@@ -7,3 +7,6 @@ numpy
 seaborn
 matplotlib
 matplotlib.colors
+matplotlib.pyplot
+matplotlib.ticker
+mpl_toolkits.axes_grid1
