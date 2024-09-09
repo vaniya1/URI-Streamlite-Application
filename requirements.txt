@@ -1,12 +1,6 @@
-streamlit
-pandas
-sys
-lasio
-math
+streamlit==1.38.0
+pandas==2.2.2
+lasio==0.28.2
+matplotlib==3.7.1
 numpy
 seaborn
-matplotlib
-matplotlib.colors
-matplotlib.pyplot
-matplotlib.ticker
-mpl_toolkits.axes_grid1
