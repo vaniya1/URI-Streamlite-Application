@@ -241,7 +241,7 @@ def main():
 
     # File uploading for both LAS and Formation Table
     las_file = st.file_uploader("Upload a LAS File", type=["LAS", "las"])
-    formation_file = st.file_uploader("Upload a Formation Table File", type=["csv"])
+    formation_file = st.file_uploader("Upload a Formation Table File", type=["csv", "CSV"])
 
     if las_file and formation_file:
         las = lasio.read(las_file)
