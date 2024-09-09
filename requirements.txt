@@ -1,6 +1,8 @@
-streamlit==1.38.0
-pandas==2.2.2
-lasio==0.28.2
-matplotlib==3.7.1
-numpy
+streamlit
+pandas
+matplotlib
 seaborn
+lasio==0.31
+plotly
+numpy
+
