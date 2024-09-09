@@ -232,6 +232,7 @@ def display_mechanical_properties_table(MechPropMean):
     st.write(table_df)
     return table_df
 
+
 def main():
     st.title("Mechanical Properties of Selected Curves and LAS File")
     
@@ -241,42 +242,55 @@ def main():
 
     # File uploading for both LAS and Formation Table
     las_file = st.file_uploader("Upload a LAS File", type=["LAS", "las"])
-    formation_file = st.file_uploader("Upload a Formation Table File", type=["csv", "CSV"])
+    formation_file = st.file_uploader("Upload a Formation Table File", type=["csv"])
 
     if las_file and formation_file:
-        las = lasio.read(las_file)
-        formationtops = pd.read_csv(formation_file)
-        las, formation_details = get_formation_and_tops(las, formationtops)
-        MechProp, logData = Calculate_mechanical_Prop(las, formation_details)
+        try:
+            # Convert file-like object to bytes for debugging
+            las_file_bytes = las_file.read()
 
-        # Show the user the matched curves for their selection
-        st.subheader("Matched Curves with Units")
-        st.write("Unit found but no mnemonic keyword matched.")
-        st.write("Curves with matched unit(s) (US/FT):")
-        st.write("1: Mnemonic: DT_E, Unit: US/FT")
+            # Debug: Display file content preview (up to 1000 bytes)
+            st.write("File content preview:")
+            st.write(las_file_bytes[:1000].decode(errors='ignore'))
 
-        # Let the user choose the curve
-        curve_selection = st.text_input("Select a curve (1-1) or 0 to skip:", "1")
+            # Rewind the file object
+            las_file.seek(0)
 
-        if curve_selection == "1":
-            # Option for Table of Mechanical Properties
-            if choice == "Table of Mech. Properties":
-                MechPropMean = MechProp.groupby('Formation Code').mean().reset_index()
-                st.subheader("Mechanical Properties Table")
-                display_mechanical_properties_table(MechPropMean)
+            # Read the LAS file
+            las = lasio.read(las_file)
+            
+            # Process formation file
+            formationtops = pd.read_csv(formation_file)
+            las, formation_details = get_formation_and_tops(las, formationtops)
+            MechProp, logData = Calculate_mechanical_Prop(las, formation_details)
 
-            # Option for Plots of Mechanical Properties
-            elif choice == "Plots of Mechanical Properties":
-                st.subheader("Mechanical Properties Plots")
-                plot_lithology(logData, MechProp)
-        else:
-            st.write("No valid curve selected.")
+            # Show the user the matched curves for their selection
+            st.subheader("Matched Curves with Units")
+            st.write("Unit found but no mnemonic keyword matched.")
+            st.write("Curves with matched unit(s) (US/FT):")
+            st.write("1: Mnemonic: DT_E, Unit: US/FT")
+
+            # Let the user choose the curve
+            curve_selection = st.text_input("Select a curve (1-1) or 0 to skip:", "1")
+
+            if curve_selection == "1":
+                # Option for Table of Mechanical Properties
+                if choice == "Table of Mech. Properties":
+                    MechPropMean = MechProp.groupby('Formation Code').mean().reset_index()
+                    st.subheader("Mechanical Properties Table")
+                    display_mechanical_properties_table(MechPropMean)
+
+                # Option for Plots of Mechanical Properties
+                elif choice == "Plots of Mechanical Properties":
+                    st.subheader("Mechanical Properties Plots")
+                    plot_lithology(logData, MechProp)
+            else:
+                st.write("No valid curve selected.")
+        except Exception as e:
+            st.error(f"An error occurred: {e}")
 
 if __name__ == '__main__':
     main()
-# In[11]:
-
-
 
 
 
