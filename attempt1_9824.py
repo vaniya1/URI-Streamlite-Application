@@ -20,7 +20,6 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from pandas import set_option
 set_option("display.max_rows", 10)
 pd.options.mode.chained_assignment = None
-get_ipython().run_line_magic('matplotlib', 'inline')
 lithology_dict = {
     3120: "SSH", 3000: "S", 7100: "SH", 1600: "SHS", 3360: "SSH", 6860: "SH",
     2180: "S", 1860: "SHS", 2060: "SH", 2480: "SSH", 7200: "LSSH", 6780: "LS",
