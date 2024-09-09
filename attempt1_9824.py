@@ -18,6 +18,7 @@ import matplotlib.colors as colors
 from matplotlib.ticker import MaxNLocator
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from pandas import set_option
+
 set_option("display.max_rows", 10)
 pd.options.mode.chained_assignment = None
 lithology_dict = {
@@ -41,8 +42,7 @@ NPHI_mnemonic = ['NPHI', 'NPRS', 'NPORS', "NPHIS", "HNPOS", "HNPO_SS", "NPOR_S",
 NPHI_units = ['V/V']
 
 
-def get_formation_and_tops(las_file_path):
-    las = lasio.read(las_file_path)
+def get_formation_and_tops(las, formationtops):
     well_name = las.well['API'].value
     filtered_data = formationtops[formationtops['API_UWI_12'] == well_name]
     if filtered_data.empty:
@@ -60,6 +60,7 @@ def get_formation_and_tops(las_file_path):
         raise ValueError(f"Unexpected depth unit: {depth_unit}")
     formation_details.at[formation_details.index[-1], 'MD_Bottom'] = max_depth
     return las, formation_details
+
 def select_curve(las, mnemonic_keywords, units):
     matched_curves = []
     for curve in las.curves:
@@ -68,15 +69,13 @@ def select_curve(las, mnemonic_keywords, units):
                 if keyword in curve.mnemonic and curve.unit == unit:
                     matched_curves.append(curve)
     if len(matched_curves) > 1:
-        print("Multiple mnemonic keywords matched with the provided units:")
-        for i, curve in enumerate(matched_curves):
-            print(f"{i+1}: Mnemonic: {curve.mnemonic}, Unit: {curve.unit}")
-        
-        choice = int(input(f"Select a curve (1-{len(matched_curves)}) or 0 to skip: "))
-        if choice > 0 and choice <= len(matched_curves):
-            return matched_curves[choice-1].mnemonic
-        else:
+        # Streamlit doesn't handle console input. Consider using st.selectbox for multiple options.
+        choices = [f"{i+1}: Mnemonic: {curve.mnemonic}, Unit: {curve.unit}" for i, curve in enumerate(matched_curves)]
+        choice = st.selectbox("Select a curve", options=choices + ["0: Skip"], index=0)
+        if choice.startswith("0"):
             return None
+        index = int(choice.split(":")[0]) - 1
+        return matched_curves[index].mnemonic
     elif len(matched_curves) == 1:
         return matched_curves[0].mnemonic
     matched_unit_curves = []
@@ -84,16 +83,14 @@ def select_curve(las, mnemonic_keywords, units):
         if curve.unit in units:
             matched_unit_curves.append(curve)
     if matched_unit_curves:
-        print("Unit found but no mnemonic keyword matched.")
-        print(f"Curves with matched unit(s) ({', '.join(units)}):")
-        for i, curve in enumerate(matched_unit_curves):
-            print(f"{i+1}: Mnemonic: {curve.mnemonic}, Unit: {curve.unit}")        
-        choice = int(input(f"Select a curve (1-{len(matched_unit_curves)}) or 0 to skip: "))
-        if choice > 0 and choice <= len(matched_unit_curves):
-            return matched_unit_curves[choice-1].mnemonic
-        else:
+        choices = [f"{i+1}: Mnemonic: {curve.mnemonic}, Unit: {curve.unit}" for i, curve in enumerate(matched_unit_curves)]
+        choice = st.selectbox("Select a curve", options=choices + ["0: Skip"], index=0)
+        if choice.startswith("0"):
             return None
+        index = int(choice.split(":")[0]) - 1
+        return matched_unit_curves[index].mnemonic
     return None
+
 def Calculate_mechanical_Prop(las, formation_details):
     DEPT = select_curve(las, DEPT_mnemonic, DEPT_units)
     DT = select_curve(las, DT_mnemonic, DT_units)
@@ -114,21 +111,21 @@ def Calculate_mechanical_Prop(las, formation_details):
     except KeyError as e:
         raise KeyError(f"Error selecting curves from LAS file: {e}")  
     logData.columns = selected_logs.keys()
-    #unit conversions:
+    # unit conversions:
     if DT_units == 'US/FT':
         logData['DT'] *= 3.281 
     if DTS_units == 'US/FT' and 'DTS' in logData.columns:
         logData['DTS'] *= 3.281
     if RHOB_units == 'KG/M3':
         logData['RHOB'] *= 0.001  
-     #if have DT, use VP and do the following calculatios
+    # if have DT, use VP and do the following calculations
     if 'DT' in logData.columns:
         logData['VP'] = 304.8 / logData['DT']  
     if 'DTS' in logData.columns and logData['DTS'].notna().any():
         logData['VS'] = 304.8 / logData['DTS']
     elif 'VP' in logData.columns:
         logData['VS'] = None
-        #No VS
+        # No VS
         for index, row in logData.iterrows():
             matching_rows = formation_details.loc[
                 (formation_details['MD_Top'] <= row['DEPT']) & (row['DEPT'] <= formation_details['MD_Bottom']),
@@ -171,108 +168,56 @@ def Calculate_mechanical_Prop(las, formation_details):
     for index, row in logData.iterrows():
         Lith = row['Lithology']
         if Lith == 'SHOG' or Lith == 'SH':
-            ucs = 1.35 * (304.8 / (row['DT'] / 3.281))**2.6
-            coh = 0.02 * np.exp(0.002 * (1000 * (row['VP'])))
-            fa = math.degrees(math.asin((1000*row['VP']-1000) / (1000*row['VP']+1000)))
-        elif Lith in ['SS', 'SOG', 'S', 'SSS', 'SO', 'SCO', 'SG']:
-            ucs = 0.035 * (1000 * row['VP']) - 31.5
-            fa = 57.8 - 105 * row['NPHI']
-            coh = ucs / (2 * math.tan(math.radians(45 + (fa / 2))))
+            ucs = 1.35 * (304.8/row['DT']) * ((0.57 * row['G']) + 0.83)
+            coh = (0.023* (304.8/row['DT'])) * ((0.57 * row['G']) + 0.83) * 0.045
+            fa = 0.013 * ucs
+        elif Lith == 'SOG' or Lith == 'S' or Lith == 'SSS' or Lith == 'SS':
+            ucs = 1.35 * (304.8/row['DT']) * ((0.64 * row['G']) + 0.94)
+            coh = (0.023* (304.8/row['DT'])) * ((0.64 * row['G']) + 0.94) * 0.045
+            fa = 0.013 * ucs
+        elif Lith == 'LS':
+            ucs = 1.35 * (304.8/row['DT']) * ((0.65 * row['G']) + 0.90)
+            coh = (0.023* (304.8/row['DT'])) * ((0.65 * row['G']) + 0.90) * 0.045
+            fa = 0.013 * ucs
+        elif Lith == 'DOL':
+            ucs = 1.35 * (304.8/row['DT']) * ((0.69 * row['G']) + 1.10)
+            coh = (0.023* (304.8/row['DT'])) * ((0.69 * row['G']) + 1.10) * 0.045
+            fa = 0.013 * ucs
         else:
-            ucs = ((7682 / ((row['DT']) / 3.281)**1.82)) / 145
-            coh = 0.02 * np.exp(0.002 * (1000 * row['VP']))
-            fa = math.degrees(math.asin((1000 * row['VP'] - 1000) / (1000 * row['VP'] + 1000)))
+            ucs, coh, fa = np.nan, np.nan, np.nan
         UCS.append(ucs)
         Coh.append(coh)
         FA.append(fa)
     MechProp['UCS'] = UCS
-    MechProp['Coh'] = Coh
-    MechProp['FA'] = FA
-    numeric_cols = ['G', 'YM', 'PRa', 'K', 'UCS', 'Coh', 'FA']
-    MechProp[numeric_cols] = MechProp[numeric_cols].apply(pd.to_numeric, errors='coerce')
+    MechProp['Cohesion'] = Coh
+    MechProp['FrictionAngle'] = FA
     return MechProp, logData
-def calculate_mechanical_properties_mean(MechProp):
-    MechPropMean = pd.DataFrame()
-    MechPropMean['DEPT'] = MechProp['DEPT'].copy()
-    meanG = MechProp.groupby('Formation Code')['G'].transform('mean')
-    meanYM = MechProp.groupby('Formation Code')['YM'].transform('mean')
-    meanPRa = MechProp.groupby('Formation Code')['PRa'].transform('mean')
-    meanK = MechProp.groupby('Formation Code')['K'].transform('mean')
-    meanUCS = MechProp.groupby('Formation Code')['UCS'].transform('mean')
-    meanCoh = MechProp.groupby('Formation Code')['Coh'].transform('mean')
-    meanFA = MechProp.groupby('Formation Code')['FA'].transform('mean')
-    MechPropMean['Formation Code'] = MechProp['Formation Code']
-    MechPropMean['G'] = meanG
-    MechPropMean['YM'] = meanYM
-    MechPropMean['PRa'] = meanPRa
-    MechPropMean['K'] = meanK
-    MechPropMean['UCS'] = meanUCS
-    MechPropMean['Coh'] = meanCoh
-    MechPropMean['FA'] = meanFA
-    return MechPropMean
-def create_facies_plot(log_data, formation_details):
-    log_data['Formation Code'] = log_data['Formation Code'].astype('int')   
-    num_formations = len(formation_details)
-    facies_colors = np.random.rand(num_formations, 3)  
-    facies_labels = formation_details.FormationName.to_list()
-    facies_color_map = {label: facies_colors[ind] for ind, label in enumerate(facies_labels)}
-    def label_facies(row, labels):
-        formation_index = int(row['Formation Code']) - 1
-        if 0 <= formation_index < len(labels):
-            return labels[formation_index]
-        else:
-            return 'Unknown'
-    log_data['FaciesLabels'] = log_data.apply(lambda row: label_facies(row, facies_labels), axis=1)
-    def make_facies_log_plot(logs, facies_colors):
-        logs = logs.dropna(subset=['Formation Code'])
-        logs['Formation Code'] = logs['Formation Code'].astype(int)
-        logs = logs.sort_values(by='DEPT')
-        cmap_facies = colors.ListedColormap(facies_colors, 'indexed')
-        ztop = logs.DEPT.min()
-        zbot = logs.DEPT.max()
-        cluster = np.repeat(np.expand_dims(logs['Formation Code'].values, 1), 100, 1).astype(int)
-        numeric_cols = logs.select_dtypes(include=np.number).columns.tolist()
-        numeric_cols.remove('Formation Code')
-        num_plots = len(numeric_cols)  
-        f, ax = plt.subplots(nrows=1, ncols=num_plots + 1, figsize=(10, 12))
-        for col_idx, col in enumerate(numeric_cols):
-            ax[col_idx].plot(logs[col], logs.DEPT, '-')
-            ax[col_idx].set_xlabel(col)
-            x_min, x_max = logs[col].min(), logs[col].max()
-            if x_min == x_max:
-                ax[col_idx].set_xlim(x_min - 1, x_max + 1) 
-            else:
-                ax[col_idx].set_xlim(x_min, x_max)
-            ax[col_idx].locator_params(axis='x', nbins=3)
-            ax[col_idx].set_ylim(ztop, zbot)
-            ax[col_idx].invert_yaxis()
-            ax[col_idx].grid()
-        im = ax[-1].imshow(cluster, interpolation='none', aspect='auto', cmap=cmap_facies, vmin=1, vmax=len(facies_colors))
-        divider = make_axes_locatable(ax[-1])
-        cax = divider.append_axes("right", size="20%", pad=0.05)
-        cbar = plt.colorbar(im, cax=cax)
-        cbar.set_label((1 * '    ').join(facies_labels))
-        cbar.set_ticks(range(1, len(facies_labels) + 1))
-        cbar.set_ticklabels(facies_labels)
-        ax[-1].set_xlabel("Formation")
-        for i in range(1, len(ax)):
-            ax[i].set_yticklabels([])
-        plt.show()
-    make_facies_log_plot(log_data, facies_colors)
-las_file_path = '100121906024W400_ECP_RS0046046885.las'
-formationtops = pd.read_csv('env_csv-FormationTops-80a2b_2024-05-12.csv')
-las, formation_details = get_formation_and_tops(las_file_path)
-formation_details
-MechProp, logData = Calculate_mechanical_Prop(las, formation_details)
-create_facies_plot(logData,formation_details)
-create_facies_plot(MechProp,formation_details)
-MechPropMean=calculate_mechanical_properties_mean(MechProp)
-create_facies_plot(MechPropMean,formation_details)
+
+def plot_lithology(logData, MechProp):
+    fig, ax1 = plt.subplots(figsize=(10, 6))
+    ax2 = ax1.twinx()
+    ax1.plot(logData['DEPT'], logData['RHOB'], 'b-', label='Density (RHOB)')
+    ax2.plot(logData['DEPT'], logData['DT'], 'r-', label='Sonic (DT)')
+    ax1.set_xlabel('Depth (m)')
+    ax1.set_ylabel('Density (RHOB)', color='b')
+    ax2.set_ylabel('Sonic (DT)', color='r')
+    ax1.legend(loc='upper left')
+    ax2.legend(loc='upper right')
+    ax1.grid()
+    ax1.set_title('Lithology')
+    st.pyplot(fig)
+    fig, ax = plt.subplots(figsize=(10, 6))
+    scatter = ax.scatter(MechProp['DEPT'], MechProp['UCS'], c=MechProp['Formation Code'].astype('category').cat.codes, cmap='viridis')
+    ax.set_xlabel('Depth (m)')
+    ax.set_ylabel('UCS')
+    ax.set_title('UCS by Formation')
+    cbar = plt.colorbar(scatter, ax=ax)
+    cbar.set_label('Formation Code')
+    st.pyplot(fig)
 
 def display_mechanical_properties_table(MechPropMean):
     # Creating a DataFrame for the mean values by grouping by formation
     mean_properties_df = MechPropMean.groupby('Formation Code').mean().reset_index()
-
     # Creating a DataFrame for all mechanical properties
     table_df = pd.DataFrame({
         'Formation Code': mean_properties_df['Formation Code'],
@@ -284,21 +229,14 @@ def display_mechanical_properties_table(MechPropMean):
         'Coh (Cohesion)': mean_properties_df['Coh'],
         'FA (Friction Angle)': mean_properties_df['FA']
     })
-
     st.write(table_df)
-
     return table_df
-
-def display_mechanical_properties_table(MechPropMean):
-    st.write(MechPropMean)
-    return MechPropMean
 
 def main():
     st.title("Mechanical Properties of Selected Curves and LAS File")
     
     activities = ["Table of Mech. Properties", "Plots of Mechanical Properties"]
     choice = st.sidebar.selectbox("Select Activity", activities)
-
     st.subheader(f"Activity Selected: {choice}")
 
     # File uploading for both LAS and Formation Table
@@ -306,13 +244,9 @@ def main():
     formation_file = st.file_uploader("Upload a Formation Table File", type=["csv"])
 
     if las_file and formation_file:
-        las_file_path = las_file.name
+        las = lasio.read(las_file)
         formationtops = pd.read_csv(formation_file)
-
-        # Load LAS and formation data
-        las, formation_details = get_formation_and_tops(las_file_path)
-        
-        # Calculate mechanical properties
+        las, formation_details = get_formation_and_tops(las, formationtops)
         MechProp, logData = Calculate_mechanical_Prop(las, formation_details)
 
         # Show the user the matched curves for their selection
@@ -327,22 +261,19 @@ def main():
         if curve_selection == "1":
             # Option for Table of Mechanical Properties
             if choice == "Table of Mech. Properties":
-                MechPropMean = calculate_mechanical_properties_mean(MechProp)
+                MechPropMean = MechProp.groupby('Formation Code').mean().reset_index()
                 st.subheader("Mechanical Properties Table")
                 display_mechanical_properties_table(MechPropMean)
 
             # Option for Plots of Mechanical Properties
             elif choice == "Plots of Mechanical Properties":
                 st.subheader("Mechanical Properties Plots")
-                create_facies_plot(logData, formation_details)
-                create_facies_plot(MechProp, formation_details)
+                plot_lithology(logData, MechProp)
         else:
             st.write("No valid curve selected.")
 
 if __name__ == '__main__':
     main()
-
-
 # In[11]:
 
 
