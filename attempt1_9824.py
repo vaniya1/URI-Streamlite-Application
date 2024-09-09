@@ -235,9 +235,10 @@ def display_mechanical_properties_table(MechPropMean):
 
 def main():
     st.title("Mechanical Properties of Selected Curves and LAS File")
-    
+
     activities = ["Table of Mech. Properties", "Plots of Mechanical Properties"]
     choice = st.sidebar.selectbox("Select Activity", activities)
+
     st.subheader(f"Activity Selected: {choice}")
 
     # File uploading for both LAS and Formation Table
@@ -246,37 +247,41 @@ def main():
 
     if las_file and formation_file:
         try:
-            # Convert file-like object to bytes for debugging
-            las_file_bytes = las_file.read()
-
-            # Debug: Display file content preview (up to 1000 bytes)
-            st.write("File content preview:")
-            st.write(las_file_bytes[:1000].decode(errors='ignore'))
-
-            # Rewind the file object
-            las_file.seek(0)
-
-            # Read the LAS file
+            # Read LAS file
             las = lasio.read(las_file)
-            
-            # Process formation file
+        except Exception as e:
+            st.error(f"Error reading LAS file: {e}")
+            return
+
+        try:
+            # Read Formation Tops CSV file
             formationtops = pd.read_csv(formation_file)
+        except Exception as e:
+            st.error(f"Error reading Formation Tops file: {e}")
+            return
+
+        try:
+            # Process data
             las, formation_details = get_formation_and_tops(las, formationtops)
             MechProp, logData = Calculate_mechanical_Prop(las, formation_details)
+        except Exception as e:
+            st.error(f"Error processing data: {e}")
+            return
 
-            # Show the user the matched curves for their selection
-            st.subheader("Matched Curves with Units")
-            st.write("Unit found but no mnemonic keyword matched.")
-            st.write("Curves with matched unit(s) (US/FT):")
-            st.write("1: Mnemonic: DT_E, Unit: US/FT")
+        # Show the user the matched curves for their selection
+        st.subheader("Matched Curves with Units")
+        st.write("Unit found but no mnemonic keyword matched.")
+        st.write("Curves with matched unit(s) (US/FT):")
+        st.write("1: Mnemonic: DT_E, Unit: US/FT")
 
-            # Let the user choose the curve
-            curve_selection = st.text_input("Select a curve (1-1) or 0 to skip:", "1")
+        # Let the user choose the curve
+        curve_selection = st.text_input("Select a curve (1-1) or 0 to skip:", "1")
 
-            if curve_selection == "1":
+        if curve_selection == "1":
+            try:
                 # Option for Table of Mechanical Properties
                 if choice == "Table of Mech. Properties":
-                    MechPropMean = MechProp.groupby('Formation Code').mean().reset_index()
+                    MechPropMean = calculate_mechanical_properties_mean(MechProp)
                     st.subheader("Mechanical Properties Table")
                     display_mechanical_properties_table(MechPropMean)
 
@@ -284,14 +289,13 @@ def main():
                 elif choice == "Plots of Mechanical Properties":
                     st.subheader("Mechanical Properties Plots")
                     plot_lithology(logData, MechProp)
-            else:
-                st.write("No valid curve selected.")
-        except Exception as e:
-            st.error(f"An error occurred: {e}")
+            except Exception as e:
+                st.error(f"Error generating plots or tables: {e}")
+        else:
+            st.write("No valid curve selected.")
 
 if __name__ == '__main__':
     main()
-
 
 
 # In[ ]:
