@@ -244,11 +244,11 @@ def main():
     # File uploading for both LAS and Formation Table
     las_file = st.file_uploader("Upload a LAS File", type=["LAS", "las"])
     formation_file = st.file_uploader("Upload a Formation Table File", type=["csv", "CSV"])
-
     if las_file and formation_file:
         try:
-            # Convert the LAS file to bytes and then read it using lasio
-            las = lasio.read(las_file)
+            # Convert uploaded LAS file to byte stream
+            las_file_bytes = las_file.read()
+            las = lasio.read(las_file_bytes)  # Read from bytes
         except Exception as e:
             st.error(f"Error reading LAS file: {e}")
             return
@@ -296,6 +296,7 @@ def main():
 
 if __name__ == '__main__':
     main()
+
 
 
 
