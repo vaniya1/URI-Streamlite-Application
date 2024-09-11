@@ -18,6 +18,7 @@ import matplotlib.colors as colors
 from matplotlib.ticker import MaxNLocator
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from pandas import set_option
+import os
 
 set_option("display.max_rows", 10)
 pd.options.mode.chained_assignment = None
@@ -232,7 +233,6 @@ def display_mechanical_properties_table(MechPropMean):
     st.write(table_df)
     return table_df
 
-
 def main():
     st.title("Mechanical Properties of Selected Curves and LAS File")
 
@@ -243,11 +243,11 @@ def main():
 
     # File uploading for both LAS and Formation Table
     las_file = st.file_uploader("Upload a LAS File", type=["LAS", "las"])
-    formation_file = st.file_uploader("Upload a Formation Table File", type=["csv"])
+    formation_file = st.file_uploader("Upload a Formation Table File", type=["csv", "CSV"])
 
     if las_file and formation_file:
         try:
-            # Read LAS file
+            # Convert the LAS file to bytes and then read it using lasio
             las = lasio.read(las_file)
         except Exception as e:
             st.error(f"Error reading LAS file: {e}")
@@ -296,6 +296,7 @@ def main():
 
 if __name__ == '__main__':
     main()
+
 
 
 # In[ ]:
