@@ -232,6 +232,10 @@ def display_mechanical_properties_table(MechPropMean):
     })
     st.write(table_df)
     return table_df
+import lasio
+import pandas as pd
+import streamlit as st
+from io import StringIO
 
 def main():
     st.title("Mechanical Properties of Selected Curves and LAS File")
@@ -244,11 +248,16 @@ def main():
     # File uploading for both LAS and Formation Table
     las_file = st.file_uploader("Upload a LAS File", type=["LAS", "las"])
     formation_file = st.file_uploader("Upload a Formation Table File", type=["csv", "CSV"])
+
     if las_file and formation_file:
         try:
-            # Convert uploaded LAS file to byte stream
+            # Convert uploaded LAS file to byte stream and handle decoding with Windows-1252
             las_file_bytes = las_file.read()
-            las = lasio.read(las_file_bytes)  # Read from bytes
+            str_io = StringIO(las_file_bytes.decode('Windows-1252'))
+            las = lasio.read(str_io)  # Read from StringIO object
+        except UnicodeDecodeError as e:
+            st.error(f"Error reading LAS file due to decoding: {e}")
+            return
         except Exception as e:
             st.error(f"Error reading LAS file: {e}")
             return
@@ -296,7 +305,6 @@ def main():
 
 if __name__ == '__main__':
     main()
-
 
 
 
